@@ -108,8 +108,3 @@ def send_to_ai(user_task: str, screenshot_path: str, screen_w: int, screen_h: in
         print(f"❌ 发生错误: {e}")
         raise
 
-
-if __name__ == '__main__':
-    print("AI通信模块测试")
-    print("请先配置 config.py 中的API信息")
-    print("然后运行主程序测试")

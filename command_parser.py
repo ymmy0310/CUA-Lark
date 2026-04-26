@@ -2,27 +2,34 @@ from desktop_automation import DesktopAutomation
 from typing import Dict, Optional
 
 
-def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optional[str]:
+def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: int, screen_h: int) -> Optional[str]:
     """
     解析并执行 AI 返回的 JSON 命令
     
     :param auto: DesktopAutomation 实例
     :param command: AI 返回的 JSON 命令
+    :param screen_w: 屏幕宽度
+    :param screen_h: 屏幕高度
     :return: 如果任务完成返回结果，否则返回 None
     """
-    # 检查是否任务完成
-    if command.get('task_completed'):
-        result = command.get('result', '任务完成')
-        print(f"✅ {result}")
-        return result
-    
     action = command.get('action')
     
     print(f"🎯 执行操作: {action}")
     
-    # 坐标修正系数
-    x_scale = 2.55
-    y_scale = 1.44
+    # 有效的操作列表
+    valid_actions = [
+        'left_click', 'right_click', 'double_click', 'drag', 'hover', 
+        'select_area', 'scroll', 'type_text', 'press_key', 'hotkey',
+        'type_password', 'task_completed', 'continue', 'open_folder'
+    ]
+    
+    # 如果不是有效的操作，且有description或thought，就直接结束（纯聊天模式）
+    if action not in valid_actions and action is not None:
+        description = command.get('description', '')
+        thought = command.get('thought', '')
+        result = description or thought or '好的，我明白了！'
+        print(f"💬 {result}")
+        return result
     
     try:
         # 鼠标操作
@@ -30,10 +37,10 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
             x = command.get('x')
             y = command.get('y')
             if x is not None:
-                x = int(x * x_scale)
+                x = int(x * screen_w)
             if y is not None:
-                y = int(y * y_scale)
-            print(f"📍 左键点击位置: (x={x}, y={y}) [修正: x*2.55, y*1.44]")
+                y = int(y * screen_h)
+            print(f"📍 左键点击位置: (x={x}, y={y}) [归一化系数: x={command.get('x'):.3f}, y={command.get('y'):.3f}]")
             auto.left_click(x=x, y=y)
             auto.wait(0.5)
             
@@ -41,10 +48,10 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
             x = command.get('x')
             y = command.get('y')
             if x is not None:
-                x = int(x * x_scale)
+                x = int(x * screen_w)
             if y is not None:
-                y = int(y * y_scale)
-            print(f"📍 右键点击位置: (x={x}, y={y}) [修正: x*2.55, y*1.44]")
+                y = int(y * screen_h)
+            print(f"📍 右键点击位置: (x={x}, y={y}) [归一化系数: x={command.get('x'):.3f}, y={command.get('y'):.3f}]")
             auto.right_click(x=x, y=y)
             auto.wait(0.5)
             
@@ -52,10 +59,10 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
             x = command.get('x')
             y = command.get('y')
             if x is not None:
-                x = int(x * x_scale)
+                x = int(x * screen_w)
             if y is not None:
-                y = int(y * y_scale)
-            print(f"📍 双击位置: (x={x}, y={y}) [修正: x*2.55, y*1.44]")
+                y = int(y * screen_h)
+            print(f"📍 双击位置: (x={x}, y={y}) [归一化系数: x={command.get('x'):.3f}, y={command.get('y'):.3f}]")
             auto.double_click(x=x, y=y)
             auto.wait(0.5)
             
@@ -66,14 +73,14 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
             end_y = command.get('end_y')
             duration = command.get('duration', 0.5)
             if start_x is not None:
-                start_x = int(start_x * x_scale)
+                start_x = int(start_x * screen_w)
             if start_y is not None:
-                start_y = int(start_y * y_scale)
+                start_y = int(start_y * screen_h)
             if end_x is not None:
-                end_x = int(end_x * x_scale)
+                end_x = int(end_x * screen_w)
             if end_y is not None:
-                end_y = int(end_y * y_scale)
-            print(f"📍 拖拽: ({start_x}, {start_y}) → ({end_x}, {end_y}) [修正: x*2.55, y*1.44]")
+                end_y = int(end_y * screen_h)
+            print(f"📍 拖拽: ({start_x}, {start_y}) → ({end_x}, {end_y}) [归一化系数]")
             auto.drag_to(end_x, end_y, start_x=start_x, start_y=start_y, duration=duration)
             auto.wait(0.5)
             
@@ -82,10 +89,10 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
             y = command.get('y')
             duration = command.get('duration', 0.3)
             if x is not None:
-                x = int(x * x_scale)
+                x = int(x * screen_w)
             if y is not None:
-                y = int(y * y_scale)
-            print(f"📍 悬停位置: (x={x}, y={y}) [修正: x*2.55, y*1.44]")
+                y = int(y * screen_h)
+            print(f"📍 悬停位置: (x={x}, y={y}) [归一化系数: x={command.get('x'):.3f}, y={command.get('y'):.3f}]")
             auto.hover(x=x, y=y, duration=duration)
             auto.wait(0.5)
             
@@ -95,14 +102,14 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
             end_x = command.get('end_x')
             end_y = command.get('end_y')
             if start_x is not None:
-                start_x = int(start_x * x_scale)
+                start_x = int(start_x * screen_w)
             if start_y is not None:
-                start_y = int(start_y * y_scale)
+                start_y = int(start_y * screen_h)
             if end_x is not None:
-                end_x = int(end_x * x_scale)
+                end_x = int(end_x * screen_w)
             if end_y is not None:
-                end_y = int(end_y * y_scale)
-            print(f"📍 框选: ({start_x}, {start_y}) → ({end_x}, {end_y}) [修正: x*2.55, y*1.44]")
+                end_y = int(end_y * screen_h)
+            print(f"📍 框选: ({start_x}, {start_y}) → ({end_x}, {end_y}) [归一化系数]")
             auto.select_area(start_x, start_y, end_x, end_y)
             auto.wait(0.5)
             
@@ -111,10 +118,10 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
             x = command.get('x')
             y = command.get('y')
             if x is not None:
-                x = int(x * x_scale)
+                x = int(x * screen_w)
             if y is not None:
-                y = int(y * y_scale)
-            print(f"📍 滚轮滚动: {clicks} 格, 位置: (x={x}, y={y}) [修正: x*2.55, y*1.44]")
+                y = int(y * screen_h)
+            print(f"📍 滚轮滚动: {clicks} 格, 位置: (x={x}, y={y}) [归一化系数]")
             auto.scroll(clicks=clicks, x=x, y=y)
             auto.wait(0.5)
             
@@ -154,6 +161,22 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
         elif action == 'continue':
             print("⏳ 继续执行...")
             return None
+        
+        elif action == 'open_folder':
+            folder_path = command.get('path', '')
+            auto.open_folder(folder_path)
+            auto.wait(1.5)
+            
+        elif action == 'click_paste_enter':
+            x = command.get('x')
+            y = command.get('y')
+            if x is not None:
+                x = int(x * screen_w)
+            if y is not None:
+                y = int(y * screen_h)
+            print(f"🎯 点击粘贴回车连招: (x={x}, y={y}) [归一化系数]")
+            auto.click_paste_enter(x=x, y=y)
+            auto.wait(0.5)
             
         else:
             print(f"⚠️  未知操作: {action}")
@@ -165,7 +188,3 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict) -> Optiona
         
     return None
 
-
-if __name__ == '__main__':
-    print("命令解析器测试")
-    print("请运行主程序测试")

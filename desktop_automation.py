@@ -1,6 +1,8 @@
 import pyautogui
 import pyperclip
 import time
+import os
+import subprocess
 from typing import Tuple, List, Optional
 
 class DesktopAutomation:
@@ -204,83 +206,32 @@ class DesktopAutomation:
         :param seconds: 等待时间（秒）
         """
         time.sleep(seconds)
+    
+    def open_folder(self, folder_path: str):
+        """
+        通过路径打开文件夹
+        :param folder_path: 文件夹路径
+        """
+        if os.path.exists(folder_path):
+            os.startfile(folder_path)
+            print(f"📂 已打开文件夹: {folder_path}")
+        else:
+            raise FileNotFoundError(f"文件夹不存在: {folder_path}")
+    
+    def click_paste_enter(self, x: Optional[int] = None, y: Optional[int] = None):
+        """
+        组合操作：点击输入框 + 粘贴 + 回车（连招！）
+        :param x: 点击的x坐标，不提供则点击当前位置
+        :param y: 点击的y坐标，不提供则点击当前位置
+        """
+        if x is not None and y is not None:
+            self.left_click(x, y)
+        else:
+            self.left_click()
+        self.wait(0.3)
+        self.hotkey('ctrl', 'v')
+        self.wait(0.2)
+        self.press_key('enter')
 
 
-# 使用示例
-if __name__ == "__main__":
-    # 创建自动化实例
-    auto = DesktopAutomation(pause_duration=0.5)  # 增加默认等待时间
-    
-    print("⚠️  警告：即将开始自动化演示")
-    print("请确保现在处于桌面，没有其他窗口遮挡")
-    print("如果程序失控，快速将鼠标移到屏幕左上角即可停止")
-    print("5秒后开始演示...")
-    auto.wait(5)
-    
-    # 示例 1: 打开记事本 - 使用剪贴板方式输入，不受输入法影响
-    auto.hotkey('win', 'd')  # 先显示桌面
-    auto.wait(1.5)
-    
-    auto.hotkey('win', 'r')
-    auto.wait(1.5)  # 等待运行窗口打开
-    auto.copy_to_clipboard('notepad')  # 复制到剪贴板
-    auto.hotkey('ctrl', 'v')  # 粘贴到运行窗口
-    auto.wait(0.5)
-    auto.press_key('enter')  # 按回车打开记事本
-    auto.wait(2.5)  # 等待记事本启动
-    
-    # 获取屏幕中心位置，确保点击在记事本窗口内
-    screen_w, screen_h = auto.get_screen_size()
-    center_x, center_y = screen_w // 2, screen_h // 2
-    auto.hover(center_x, center_y, duration=0.3)  # 移动到屏幕中心
-    auto.left_click()  # 点击确保记事本窗口激活
-    auto.wait(0.5)
-    
-    # 示例 2: 输入文本（默认使用剪贴板方式，兼容中文）
-    auto.type_text('这是桌面自动化测试演示\n\n底层功能演示：\n1. 文字输入功能正常\n')
-    
-    # 示例 3: 复制粘贴
-    auto.copy_to_clipboard('2. 剪贴板复制功能正常\n')
-    auto.hotkey('ctrl', 'v')
-    
-    # 示例 4: 快捷键操作演示
-    auto.press_key('end')  # 移动到末尾
-    auto.press_key('enter')
-    auto.type_text('\n二层功能演示：\n')
-    auto.copy_to_clipboard('3. 拖拽、双击、悬停等功能也都正常')
-    auto.hotkey('ctrl', 'v')
-    
-    # 示例 5: 鼠标操作 - 拖拽、悬停、双击
-    screen_w, screen_h = auto.get_screen_size()
-    center_x, center_y = screen_w // 2, screen_h // 2
-    
-    # 在屏幕中心 50x50 区域内做拖拽动作
-    start_x, start_y = center_x - 25, center_y - 25  # 区域左上角
-    end_x, end_y = center_x + 25, center_y + 25      # 区域右下角
-    auto.drag_to(end_x, end_y, start_x=start_x, start_y=start_y, duration=0.3)
-    
-    # 移动到屏幕中心悬停
-    auto.hover(center_x, center_y, duration=0.5)
-    
-    # 双击两次
-    auto.double_click(center_x, center_y)
-    auto.wait(0.3)
-    auto.double_click(center_x, center_y)
-    
-    # 示例 6: 鼠标操作
-    print("演示完成，5 秒后关闭记事本...")
-    auto.wait(5)
-    
-    # 关闭记事本（不保存）- 使用更可靠的方法
-    auto.hotkey('alt', 'f4')  # 尝试 Alt+F4
-    auto.wait(1)
-    # 如果 Alt+F4 没反应，使用任务管理器关闭
-    auto.press_key('n')  # 按 N 不保存
-    auto.wait(1)
-    
-    # 检查记事本是否关闭，如果没有，使用 taskkill 强制关闭
-    print("正在关闭记事本...")
-    import subprocess
-    subprocess.run(['taskkill', '/F', '/IM', 'Notepad.exe'], capture_output=True)
-    
-    print("✅ 演示结束！")
+

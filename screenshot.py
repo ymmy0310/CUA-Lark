@@ -34,10 +34,4 @@ def capture_fullscreen(save_dir: str = 'screenshots', filename: str = None) -> s
     return filepath
 
 
-if __name__ == '__main__':
-    # 测试截图
-    print('3秒后开始截图...')
-    import time
-    time.sleep(3)
-    path = capture_fullscreen()
-    print(f'测试完成！截图保存在: {path}')
+
