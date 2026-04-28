@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import sys
 import pythoncom
@@ -39,8 +40,8 @@ def create_shortcut():
     
     # 设置快捷方式属性
     shell_obj.SetPath(python_path)
-    shell_obj.SetArguments(f'"{gui_app_path}"')
-    shell_obj.SetWorkingDirectory(f'"{current_dir}"')
+    shell_obj.SetArguments(f'"{gui_app_path}"')  # 参数带引号
+    shell_obj.SetWorkingDirectory(current_dir)
     shell_obj.SetDescription('CUA-Lark - 飞书AI操作助手')
     shell_obj.SetIconLocation(python_path, 0)
     

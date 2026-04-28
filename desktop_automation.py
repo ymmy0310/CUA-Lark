@@ -232,6 +232,53 @@ class DesktopAutomation:
         self.hotkey('ctrl', 'v')
         self.wait(0.2)
         self.press_key('enter')
+    
+    # ==================== 文本编辑功能 ====================
+    
+    def delete_text(self, count: int = 1):
+        """
+        删除文本（使用退格键）
+        :param count: 删除字符数，默认 1
+        """
+        self.press_key('backspace', presses=count)
+    
+    def delete_selected(self):
+        """
+        删除选中的文本（使用 delete 键）
+        """
+        self.press_key('delete')
+    
+    def select_all(self):
+        """
+        全选文本（ctrl + a）
+        """
+        self.hotkey('ctrl', 'a')
+    
+    def delete_all(self):
+        """
+        全选后删除所有文本
+        """
+        self.select_all()
+        self.wait(0.1)
+        self.delete_selected()
+    
+    def delete_word_left(self, count: int = 1):
+        """
+        删除光标左侧的词（ctrl + backspace）
+        :param count: 删除词数，默认 1
+        """
+        for _ in range(count):
+            self.hotkey('ctrl', 'backspace')
+            self.wait(0.05)
+    
+    def delete_word_right(self, count: int = 1):
+        """
+        删除光标右侧的词（ctrl + delete）
+        :param count: 删除词数，默认 1
+        """
+        for _ in range(count):
+            self.hotkey('ctrl', 'delete')
+            self.wait(0.05)
 
 
 

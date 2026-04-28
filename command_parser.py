@@ -20,7 +20,9 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
     valid_actions = [
         'left_click', 'right_click', 'double_click', 'drag', 'hover', 
         'select_area', 'scroll', 'type_text', 'press_key', 'hotkey',
-        'type_password', 'task_completed', 'continue', 'open_folder'
+        'type_password', 'task_completed', 'continue', 'open_folder',
+        'click_paste_enter', 'delete_text', 'delete_selected', 'select_all',
+        'delete_all', 'delete_word_left', 'delete_word_right', 'request_input'
     ]
     
     # 如果不是有效的操作，且有description或thought，就直接结束（纯聊天模式）
@@ -162,6 +164,11 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
             print("⏳ 继续执行...")
             return None
         
+        elif action == 'request_input':
+            prompt = command.get('prompt', '请补充更多信息')
+            print(f"🙋 请求用户输入: {prompt}")
+            return {'type': 'request_input', 'prompt': prompt}
+        
         elif action == 'open_folder':
             folder_path = command.get('path', '')
             auto.open_folder(folder_path)
@@ -177,6 +184,40 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
             print(f"🎯 点击粘贴回车连招: (x={x}, y={y}) [归一化系数]")
             auto.click_paste_enter(x=x, y=y)
             auto.wait(0.5)
+        
+        # 文本编辑操作
+        elif action == 'delete_text':
+            count = command.get('count', 1)
+            print(f"⌫ 删除字符: {count} 个")
+            auto.delete_text(count=count)
+            auto.wait(0.3)
+            
+        elif action == 'delete_selected':
+            print(f"⌫ 删除选中文本")
+            auto.delete_selected()
+            auto.wait(0.3)
+            
+        elif action == 'select_all':
+            print(f"📋 全选文本")
+            auto.select_all()
+            auto.wait(0.3)
+            
+        elif action == 'delete_all':
+            print(f"⌫ 删除所有文本")
+            auto.delete_all()
+            auto.wait(0.5)
+            
+        elif action == 'delete_word_left':
+            count = command.get('count', 1)
+            print(f"⌫ 删除左侧词: {count} 个")
+            auto.delete_word_left(count=count)
+            auto.wait(0.3)
+            
+        elif action == 'delete_word_right':
+            count = command.get('count', 1)
+            print(f"⌫ 删除右侧词: {count} 个")
+            auto.delete_word_right(count=count)
+            auto.wait(0.3)
             
         else:
             print(f"⚠️  未知操作: {action}")

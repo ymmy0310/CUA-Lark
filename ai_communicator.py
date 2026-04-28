@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 import requests
 import base64
 import json
 import os
 from typing import Dict, Optional
-from config import AI_CONFIG, SYSTEM_PROMPT
+from config import AI_CONFIG, SYSTEM_PROMPT, TASK_PLANNING_PROMPT
 
 
 def encode_image_to_base64(image_path: str) -> str:
@@ -51,7 +52,7 @@ def send_to_ai(user_task: str, screenshot_path: str, screen_w: int, screen_h: in
     
     # 构建API请求
     headers = {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
         "Authorization": f"Bearer {AI_CONFIG['api_key']}"
     }
     
@@ -69,6 +70,7 @@ def send_to_ai(user_task: str, screenshot_path: str, screen_w: int, screen_h: in
         print(f"📤 接入点ID: {AI_CONFIG['endpoint_id']}")
         print(f"📤 消息长度: {len(str(payload))}")
         
+        # 使用 json 参数，但确保正确的编码
         response = requests.post(AI_CONFIG['api_endpoint'], headers=headers, json=payload)
         
         # 详细的响应信息
@@ -107,4 +109,71 @@ def send_to_ai(user_task: str, screenshot_path: str, screen_w: int, screen_h: in
     except Exception as e:
         print(f"❌ 发生错误: {e}")
         raise
+
+
+def plan_task(task: str) -> Optional[list]:
+    """
+    使用AI规划任务步骤
+    
+    :param task: 用户任务描述
+    :return: 任务步骤列表，失败返回None
+    """
+    print(f"📋 开始任务规划: {task}")
+    
+    # 构建消息
+    messages = [
+        {"role": "system", "content": TASK_PLANNING_PROMPT.format(task=task)},
+    ]
+    
+    # 构建API请求
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Authorization": f"Bearer {AI_CONFIG['api_key']}"
+    }
+    
+    payload = {
+        "model": AI_CONFIG['endpoint_id'],
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": 1000
+    }
+    
+    try:
+        # 发送请求
+        response = requests.post(AI_CONFIG['api_endpoint'], headers=headers, json=payload)
+        response.raise_for_status()
+        
+        # 解析响应
+        result = response.json()
+        ai_response = result['choices'][0]['message']['content']
+        
+        # 尝试解析为JSON
+        try:
+            plan_data = json.loads(ai_response)
+            if "plan" in plan_data and isinstance(plan_data["plan"], list):
+                print(f"✅ 任务规划完成，共 {len(plan_data['plan'])} 个步骤")
+                for i, step in enumerate(plan_data['plan'], 1):
+                    print(f"  {i}. {step}")
+                return plan_data["plan"]
+        except json.JSONDecodeError:
+            print(f"⚠️  AI返回的不是有效JSON，尝试提取...")
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', ai_response)
+            if json_match:
+                try:
+                    plan_data = json.loads(json_match.group())
+                    if "plan" in plan_data and isinstance(plan_data["plan"], list):
+                        print(f"✅ 任务规划完成，共 {len(plan_data['plan'])} 个步骤")
+                        for i, step in enumerate(plan_data['plan'], 1):
+                            print(f"  {i}. {step}")
+                        return plan_data["plan"]
+                except:
+                    pass
+        
+        print(f"⚠️  无法解析任务规划，跳过规划阶段")
+        return None
+            
+    except Exception as e:
+        print(f"❌ 任务规划失败: {e}")
+        return None
 
