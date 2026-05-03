@@ -1,5 +1,8 @@
 from desktop_automation import DesktopAutomation
 from typing import Dict, Optional
+import subprocess
+import sys
+import os
 
 
 def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: int, screen_h: int) -> Optional[str]:
@@ -21,8 +24,9 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
         'left_click', 'right_click', 'double_click', 'drag', 'hover', 
         'select_area', 'scroll', 'type_text', 'press_key', 'hotkey',
         'type_password', 'task_completed', 'continue', 'open_folder',
-        'click_paste_enter', 'delete_text', 'delete_selected', 'select_all',
-        'delete_all', 'delete_word_left', 'delete_word_right', 'request_input'
+        'click_paste', 'select_text', 'delete_text', 'delete_selected',
+        'select_all', 'delete_all', 'delete_word_left', 'delete_word_right',
+        'request_input', 'show_cua_window', 'hide_cua_window'
     ]
     
     # 如果不是有效的操作，且有description或thought，就直接结束（纯聊天模式）
@@ -151,7 +155,14 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
         elif action == 'type_password':
             password = command.get('password', '')
             confirm = command.get('confirm', True)
-            auto.type_password(password=password, confirm=confirm)
+            x = command.get('x')
+            y = command.get('y')
+            if x is not None:
+                x = int(x * screen_w)
+            if y is not None:
+                y = int(y * screen_h)
+            print(f"🔐 密码输入: (x={x}, y={y}) [归一化系数: x={command.get('x'):.3f}, y={command.get('y'):.3f}]")
+            auto.type_password(password=password, confirm=confirm, x=x, y=y)
             auto.wait(0.5)
             
         # 任务控制
@@ -174,16 +185,30 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
             auto.open_folder(folder_path)
             auto.wait(1.5)
             
-        elif action == 'click_paste_enter':
+        elif action == 'click_paste':
+            text = command.get('text', '')
             x = command.get('x')
             y = command.get('y')
             if x is not None:
                 x = int(x * screen_w)
             if y is not None:
                 y = int(y * screen_h)
-            print(f"🎯 点击粘贴回车连招: (x={x}, y={y}) [归一化系数]")
-            auto.click_paste_enter(x=x, y=y)
+            print(f"🎯 点击粘贴连招: (x={x}, y={y}) 文本: {text[:30]}{'...' if len(text) > 30 else ''}")
+            auto.click_paste(text=text, x=x, y=y)
             auto.wait(0.5)
+        
+        elif action == 'select_text':
+            x = command.get('x')
+            y = command.get('y')
+            if x is not None:
+                x = int(x * screen_w)
+            if y is not None:
+                y = int(y * screen_h)
+            print(f"🎯 选中文本连招(点击+全选): (x={x}, y={y}) [归一化系数]")
+            auto.left_click(x=x, y=y)
+            auto.wait(0.3)
+            auto.hotkey('ctrl', 'a')
+            auto.wait(0.3)
         
         # 文本编辑操作
         elif action == 'delete_text':
@@ -219,6 +244,16 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
             auto.delete_word_right(count=count)
             auto.wait(0.3)
             
+        elif action == 'show_cua_window':
+            print(f"🖥️  显示CUA主窗口")
+            _send_window_command("show")
+            auto.wait(0.5)
+            
+        elif action == 'hide_cua_window':
+            print(f"🖥️  隐藏CUA主窗口")
+            _send_window_command("hide")
+            auto.wait(0.5)
+            
         else:
             print(f"⚠️  未知操作: {action}")
             return None
@@ -228,4 +263,32 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
         return None
         
     return None
+
+
+def _send_window_command(command: str):
+    """
+    发送窗口控制命令到CUA主程序
+    :param command: show 或 hide
+    """
+    try:
+        # 获取当前脚本所在目录
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        controller_script = os.path.join(script_dir, "window_controller.py")
+        
+        # 使用python解释器运行控制器脚本
+        python_exe = sys.executable
+        result = subprocess.run(
+            [python_exe, controller_script, command],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if result.returncode == 0:
+            print(f"✅ 窗口控制命令已发送: {command}")
+        else:
+            print(f"⚠️  窗口控制命令发送失败: {result.stderr}")
+            
+    except Exception as e:
+        print(f"❌ 发送窗口控制命令时出错: {e}")
 

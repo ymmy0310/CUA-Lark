@@ -1,4 +1,150 @@
-# CUA-Lark 飞书桌面自动化系统 开发日志
+# CUA-Lark 飞书桌面自动化系统 更新日志
+
+---
+
+## 版本：v3.5 (2026-05-03)
+
+### 更新目标
+修复暂停后继续变新任务的问题，解决窗口反复最小化干扰操作，新增迷你控制条替代主窗口监控。
+
+### 新增功能
+1. **迷你控制条（MiniControlBar）**
+   - 位置：屏幕左下角，任务执行期间始终显示
+   - 实时状态显示（📷 截图中 / 🤖 思考中 / ⚡ 执行中 / ✅ 完成）
+   - 暂停/继续按钮（⏸ / ▶）
+   - 日志展开/收起按钮（📋），点击向上展开显示详细日志
+   - 按钮悬停提示功能
+   - 支持鼠标拖拽调整位置
+   - 宽度 380px，避免按钮拥挤
+   - 移除边缘自动隐藏，保持始终可见便于点击
+
+2. **窗口管理重构**
+   - 任务执行期间：主窗口隐藏，仅显示迷你控制条
+   - 暂停/request_input时：自动恢复主窗口，隐藏控制条
+   - 任务完成后：自动恢复主窗口
+   - 截图阶段：窗口保持隐藏，不干扰飞书焦点
+
+### Bug修复
+1. **暂停后继续变成新任务（Bug1）**
+   - 问题：用户暂停后输入内容，系统把用户输入当成全新任务执行
+   - 修复：保存原始任务到 `self.original_task`，循环中使用原始任务参数，用户输入只写入对话历史
+
+2. **用户反馈重复显示（Bug2）**
+   - 问题：暂停时用户输入被重复记录
+   - 修复：区分"继续"和具体输入，避免重复记录
+
+3. **AI request_input 未触发**
+   - 问题：AI返回 `request_input` 指令后未暂停，继续执行
+   - 修复：在 `execute_one_iteration` 中添加 `request_input` 返回值处理
+
+4. **窗口反复最小化干扰操作**
+   - 问题：窗口反复最小化/恢复会取消其他应用焦点
+   - 修复：任务执行期间全程保持主窗口隐藏，通过控制条监控
+
+5. **控制条交互问题**
+   - 问题：边缘自动隐藏导致难点击、悬停闪烁、日志方向错误
+   - 修复：取消边缘自动隐藏，移除悬停自动展开（改为点击展开），日志面板向上展开，添加按钮悬停提示
+
+6. **文本输入问题（Bug3）**
+   - 问题：click_paste 未修改剪贴板直接粘贴，导致粘贴的是旧内容
+   - 修复：click_paste 改为先 copy_to_clipboard 写入剪贴板，再执行粘贴
+   - 问题：click_paste_enter 的回车导致写文档时多出一堆换行
+   - 修复：拆分为 click_paste + 独立的 enter 操作，提升灵活性
+   - 问题：修改已有文本时直接粘贴会追加而非替换
+   - 修复：引入 select_text 连招（点击+ctrl+a），先全选再粘贴
+   - 问题：type_text 被误用于直接输入，不激活输入框导致失败
+   - 修复：prompt 中明确 type_text 必须与 select_text 绑定使用，仅用于替换已有文本
+
+7. **控制条宽度不足**
+   - 问题：按钮拥挤难以点击
+   - 修复：宽度从 280px → 330px → 380px 逐步增加
+
+### 改进优化
+1. **任务理解确认机制**
+   - 每次任务开始前，AI 先分析任务需求、识别缺失信息、展示理解
+   - 用户可确认直接执行，或补充信息后执行
+   - 避免 AI 自行猜测导致操作偏差
+
+2. **文本资料处理规则**
+   - 新增规则指导 AI 如何处理用户提供的文本资料
+   - 资料可见时：select_text + ctrl+c → show_cua_window → left_click 输入栏 → ctrl+v → request_input
+   - 资料不可见时：先尝试 open_folder 打开文件夹，找不到再 request_input 询问路径
+
+3. **窗口控制指令**
+   - 新增 `show_cua_window` / `hide_cua_window` 指令
+   - AI 可通过命令行调出 CUA 主窗口，解决迷你控制条无法输入的问题
+   - 新增 window_controller.py 信号机制，gui_app.py 每 500ms 检查信号
+
+### 代码重构
+- **feishu_cua.py**：全程窗口最小化，多处暂停检查点，暂停时丢弃AI JSON，添加 request_input 处理，新增任务理解确认逻辑
+- **gui_app.py**：新增 MiniControlBar 类，重构窗口管理逻辑，新增窗口控制信号监听
+- **command_parser.py**：新增 show_cua_window / hide_cua_window 指令处理，新增 _send_window_command 函数
+- **config.py**：补充 click_paste 需要先写入剪贴板的说明，新增窗口控制指令格式，新增文本资料处理规则
+- **window_controller.py**：新增窗口控制信号文件
+
+### 修改文件
+- `gui_app.py` - 核心GUI重构，迷你控制条，窗口控制信号监听
+- `feishu_cua.py` - 执行流程重构，任务理解确认
+- `command_parser.py` - 密码输入添加坐标参数，新增窗口控制指令
+- `desktop_automation.py` - 密码输入添加点击激活，click_paste 修改剪贴板
+- `config.py` - 提示词更新，文本资料处理规则，窗口控制指令
+- `window_controller.py` - 新增窗口控制信号机制
+
+---
+
+## 版本：v3.4
+
+### 更新目标
+添加友好的 API 配置界面，优化窗口体验，解决 API 限流问题。
+
+### 新增功能
+1. 🔧 API 配置窗口 - 图形化配置界面，支持输入 API 地址、API Key、接入点 ID
+2. 📋 预设 API 地址 - 下拉菜单选择常用 API（火山引擎、自定义）
+3. 🔐 配置安全 - 配置保存到单独的 config_api.json，避免提交到公开仓库
+4. 👋 首次使用引导 - 程序启动时自动检查配置，首次使用弹出配置窗口
+5. ⏸️ 指数退避重试 - 解决 429 限流问题，自动重试最多5次
+6. 🛑 AI智能停止 - AI遇到卡住/失败时自动调用 request_input 请求用户帮助
+7. 🛡️ 程序化安全网 - 连续3次相同操作自动强制 request_input，防止无限循环
+
+### 改进优化
+1. 📁 配置文件分离 - 新增 config_manager.py，专门管理 API 配置
+2. 🚀 动态加载配置 - ai_communicator.py 优先从配置文件加载，回退到 config.py
+3. 🎨 配置按钮 - GUI 中新增蓝色 API 配置按钮，随时打开配置
+4. 🖥️ 窗口优化 - 主窗口不再置顶，宽度增加到1400，以展示所有按键
+5. 🔒 配置窗口改进 - 保持在最上层；修复窗口实例被GC回收导致按钮失效；messagebox添加parent确保置顶
+6. 🔒 网址输入锁定 - 选择火山引擎等预设选项时，自动锁定网址输入框
+7. 🐛 终止逻辑修复 - 修复终止任务后再次发送被误终止的bug
+8. 💬 对话历史修复 - 修复两次任务间对话历史被清空的问题
+9. 📝 Prompt增强 - 丰富 request_input 使用场景，强化 win+D 备用策略，明确AI自行停止规则
+10. 🎯 任务规划修复 - 修复GUI中任务规划功能被绕过的问题，现在正确调用 plan_task
+11. 📷 截图优化 - 截图前用 iconify() 最小化窗口而非 withdraw() 隐藏，既不遮挡屏幕又不影响任务栏其他图标位置；执行命令阶段也最小化窗口防止AI误操作CUA界面
+12. 🏗️ 架构重构 - 任务执行逻辑从gui_app.py迁移至feishu_cua.run_task()，GUI层仅保留UI桥接；规划改为预览模式，迭代上限250，移除分步策略
+13. 🚫 Prompt防误操作 - 新增禁止AI点击/关闭CUA界面的指令
+14. ⏱️ 时序优化 - 截图前最小化后等待0.5s、执行命令后恢复窗口前等待2.0s，确保窗口状态稳定
+15. 💬 历史记录修复 - 修复用户回复request_input时未写入conversation_history的bug，解决AI重复发送相同求助的问题
+16. ⌨️ 输入操作规则 - 新增prompt指令：click_paste自带激活功能严禁预点击；type_text/ctrl+a需先点击激活
+17. 📋 飞书业务指引 - 新增预约会议详细操作流程（主题/联系人/时间/附件）和云文档新建方式指引
+18. 🗑️ 删除任务规划功能 - 功能不稳定bug多，回归基本功确保CUA基础功能稳定
+19. ⏸️ 暂停逻辑重构 - AI通信环节支持暂停（JSON不处理直接跳过），暂停后返回PAUSED标记进入request_input等待而非直接终止
+20. 📢 暂停反馈优化 - 暂停时输出醒目分隔线+状态提示，让用户明确知道已暂停
+21. ⌨️ click_paste_enter改名 - 改为click_paste，删除回车步骤，提升通用性
+
+### 配置更新
+- 新增 `config_api.json` - 用户个人 API 配置文件（独立存储）
+- config.py 保持为模板文件，用于代码提交
+
+### 新增文件
+- `config_manager.py` - API 配置管理模块
+
+### 更新文件
+- `ai_communicator.py` - 支持动态加载配置，添加指数退避重试机制
+- `gui_app.py` - 新增 API 配置窗口和按钮，启动时检查配置，优化窗口，修复终止/历史/规划/GC等bug
+- `command_parser.py` - 回归简洁，移除快照对比功能
+- `config.py` - 模板化，移除真实 API 信息，大幅增强 prompt 指令
+- `CHANGELOG.md` - 添加 v3.4 更新说明
+- `README.md` - 更新文档，说明新的配置方式
+
+---
 
 ## 版本：v3.3
 
@@ -108,19 +254,6 @@
 - `config.py` - 更新prompt，调整操作优先级
 - `README.md` - 更新v3.1说明
 
-### 使用方式
-```bash
-# 图形界面启动（推荐）
-python gui_app.py
-
-# 或直接双击
-启动CUA-Lark(无窗口).bat
-
-# 或创建桌面快捷方式
-pip install pywin32
-python setup_shortcut.py
-```
-
 ---
 
 ## 版本：v3.0
@@ -143,8 +276,213 @@ python setup_shortcut.py
 - 🔄 闭环执行 - 截图→分析→操作→再截图检查
 - 🛡️ 安全机制 - 故障安全、最大迭代次数限制
 
-### 更新总结
-v3.0是一个里程碑版本，正式转向飞书专属优化，提供图形界面，提升用户体验。
+---
+
+## 版本：v2.6 (2026-04-24)
+
+### 更新目标
+解决 AI 返回坐标与实际点击位置偏差的问题。
+
+### 新增功能
+1. 📐 豆包坐标线性修正 - 在 command_parser.py 中加入坐标修正系数
+   - x_scale = 2.55
+   - y_scale = 1.44
+2. 🎯 全鼠标操作修正 - 对所有鼠标操作坐标进行修正
+3. 🖨️ 修正提示 - 打印时显示 `[修正: x*2.55, y*1.44]` 提示
+
+### 更新文件
+- `command_parser.py` - 加入坐标修正逻辑
+
+---
+
+## 版本：v2.5 (2026-04-24)
+
+### 更新目标
+添加鼠标坐标打印，方便调试定位。
+
+### 新增功能
+1. 📍 鼠标坐标打印 - command_parser.py 中加入鼠标操作坐标打印
+2. 🖨️ 统一打印格式 - `📍 左键点击位置: (x, y)`
+3. 🎯 全操作覆盖 - 支持所有鼠标操作（left_click, right_click, double_click, drag, hover, select_area, scroll）
+
+### 更新文件
+- `command_parser.py` - 添加坐标打印
+
+---
+
+## 版本：v2.4 (2026-04-24)
+
+### 更新目标
+增强 AI 交互体验，添加思考过程描述和返回桌面策略。
+
+### 改进优化
+1. 💭 AI 思考显示 - SYSTEM_PROMPT 中加入 thought 字段，让 AI 写下思考过程
+2. 📝 AI 描述显示 - SYSTEM_PROMPT 中加入 description 字段，让 AI 描述看到了什么、要做什么
+3. 🏠 返回桌面策略 - SYSTEM_PROMPT 中加入【特殊提示】：对于"打开软件"操作，优先尝试返回桌面（Win+D）
+4. 🖨️ 思考输出 - feishu_cua.py 中打印 💭 AI思考 和 📝 AI描述
+5. ✅ 顶层完成标记 - command_parser 支持 task_completed 字段在顶层
+
+### 更新文件
+- `config.py` - SYSTEM_PROMPT 增强
+- `feishu_cua.py` - 打印 AI 思考和描述
+- `command_parser.py` - 支持顶层 task_completed
+
+---
+
+## 版本：v2.3 (2026-04-24)
+
+### 修复问题
+火山方舟 API 不兼容 `response_format: {"type": "json_object"}` 参数
+- 删除 payload 中的 `response_format` 参数
+- 保留 JSON 解析逻辑（从 AI 回复中提取 JSON）
+
+### 更新文件
+- `ai_communicator.py` - 移除 response_format 参数
+
+---
+
+## 版本：v2.2 (2026-04-24)
+
+### 更新目标
+让 AI 使用屏幕尺寸比例计算坐标，提高跨分辨率兼容性。
+
+### 新增功能
+1. 📐 屏幕尺寸比例 - SYSTEM_PROMPT 中加入屏幕尺寸说明
+2. 🧮 比例计算坐标 - 告诉 AI 使用比例计算坐标（比例×屏幕尺寸）
+3. 🖥️ 尺寸信息传递 - feishu_cua.py 中获取屏幕尺寸，在发送给 AI 的消息中加入【屏幕尺寸：宽x高】信息
+
+### 更新文件
+- `config.py` - SYSTEM_PROMPT 添加屏幕尺寸说明
+- `feishu_cua.py` - 获取并传递屏幕尺寸
+
+---
+
+## 版本：v2.1 (2026-04-24)
+
+### 更新目标
+配置文件适配火山方舟（豆包 2.0 Pro）。
+
+### 配置更新
+1. 🔑 使用 endpoint_id 代替 model 参数
+2. 🌡️ temperature 调至 0.1，更稳定输出 JSON
+3. 🔐 填入真实 API Key 和接入点 ID
+
+### 更新文件
+- `config.py` - 适配火山方舟 API 配置
+
+---
+
+## 版本：v2.0 (2026-04-23) - 飞书 CUA 完全体
+
+### 项目设计目标
+构建完整的 AI 驱动桌面自动化系统：
+1. 截图全屏 + 用户任务输入
+2. 发送 prompt+截图 给 AI
+3. AI 返回 JSON 指令，系统执行
+4. 循环直到任务完成
+
+### 新增模块
+
+| 文件名 | 功能 |
+|--------|------|
+| `screenshot.py` | 全屏截图模块，自动保存带时间戳的图片 |
+| `ai_communicator.py` | AI 通信模块，发送 prompt+截图，接收 JSON |
+| `command_parser.py` | JSON 命令解析器，执行桌面操作 |
+| `config.py` | 配置文件（API、系统提示词） |
+| `feishu_cua.py` | 🚀 主程序，完整闭环 |
+| `requirements.txt` | 依赖列表 |
+| `PROJECT_OVERVIEW.md` | 完整项目说明 |
+
+### 核心功能实现
+
+#### 1. 截图模块 - screenshot.py
+```python
+capture_fullscreen(save_dir='screenshots', filename=None)
+# 自动生成时间戳文件名
+# 返回截图完整路径
+```
+
+#### 2. AI 通信模块 - ai_communicator.py
+```python
+send_to_ai(user_task, screenshot_path, conversation_history=None)
+# 功能：base64编码截图，发送给支持视觉的AI模型
+# 自动解析JSON响应，支持Markdown包裹的JSON
+```
+
+#### 3. 命令解析器 - command_parser.py
+```python
+parse_and_execute_command(auto, command)
+# 支持的action：
+# - left_click, right_click, double_click
+# - drag, hover, select_area, scroll
+# - type_text, press_key, hotkey
+# - type_password
+# - task_completed, continue
+```
+
+#### 4. 主程序闭环 - feishu_cua.py
+```python
+feishu_cua_system(user_task, max_iterations=10, fail_safe=True)
+# 工作流：
+# 1. 用户输入任务
+# 2. 5秒准备时间
+# 3. 循环执行：截图→发AI→执行→检查完成
+# 4. 最多10次迭代，防止无限循环
+```
+
+### 系统提示词设计 - config.py
+**SYSTEM_PROMPT** 包含：
+1. AI 能力说明（告诉 AI 能做什么）
+2. 所有操作的 JSON 格式示例
+3. 坐标系统说明
+4. 工作流程说明
+
+### 新增依赖
+- ✅ `requests` - HTTP 请求库，用于调用 AI API
+
+### 项目结构
+```
+e:\cpulark\11\
+├── 【v1.0 核心库】
+│   └── desktop_automation.py    # 桌面自动化操作
+│
+├── 【v2.0 新增模块】
+│   ├── screenshot.py            # 屏幕截图
+│   ├── ai_communicator.py       # AI 通信
+│   ├── command_parser.py        # JSON 命令解析
+│   ├── feishu_cua.py          # 主程序（完整闭环）
+│   └── config.py              # 配置文件
+│
+├── 【文档 & 配置】
+│   ├── requirements.txt       # 依赖列表
+│   ├── README.md            # 使用说明（原始）
+│   ├── PROJECT_OVERVIEW.md  # 完整项目说明
+│   └── CHANGELOG.md         # 本文档
+```
+
+### 使用方法
+1. 安装依赖
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. 配置 API
+   ```python
+   # config.py
+   AI_CONFIG = {
+       'api_endpoint': '你的API地址',
+       'api_key': '你的API密钥',
+       'model': '支持视觉的模型',
+   }
+   ```
+3. 运行主程序
+   ```bash
+   python feishu_cua.py
+   ```
+
+### 安全机制
+- ✅ **故障安全**：鼠标移到屏幕左上角紧急停止
+- ✅ **最大迭代次数**：默认 10 次，防止无限循环
+- ✅ **操作间隔**：每个操作后暂停 0.5 秒
 
 ---
 
@@ -198,8 +536,6 @@ auto.get_mouse_position()
 auto.get_screen_size()
 auto.wait(seconds)
 ```
-
----
 
 ### 开发过程中遇到的问题及解决方案
 
@@ -327,7 +663,6 @@ auto = DesktopAutomation(fail_safe=False, pause_duration=0.5)
 ---
 
 ### 设计哲学
-
 1. **简单优先**：代码逻辑要简单清晰，避免过度设计
 2. **剪贴板万能**：默认使用剪贴板方式，避开输入法问题
 3. **场景专用**：密码输入等特殊场景使用专门函数
@@ -365,408 +700,4 @@ auto.press_key('enter')
 
 ---
 
-**最后更新**: 2026-04-24
-
----
-
----
-
-## 版本：v2.0 - 飞书 CUA 完全体
-
-### 项目设计目标
-
-构建完整的 AI 驱动桌面自动化系统：
-1. 截图全屏 + 用户任务输入
-2. 发送 prompt+截图 给 AI
-3. AI 返回 JSON 指令，系统执行
-4. 循环直到任务完成
-
----
-
-### 新增模块
-
-| 文件名 | 功能 |
-|--------|------|
-| `screenshot.py` | 全屏截图模块，自动保存带时间戳的图片 |
-| `ai_communicator.py` | AI 通信模块，发送 prompt+截图，接收 JSON |
-| `command_parser.py` | JSON 命令解析器，执行桌面操作 |
-| `config.py` | 配置文件（API、系统提示词） |
-| `feishu_cua.py` | 🚀 主程序，完整闭环 |
-| `requirements.txt` | 依赖列表 |
-| `PROJECT_OVERVIEW.md` | 完整项目说明 |
-
----
-
-### 核心功能实现
-
-#### 1. 截图模块 - screenshot.py
-```python
-capture_fullscreen(save_dir='screenshots', filename=None)
-# 自动生成时间戳文件名
-# 返回截图完整路径
-```
-
-#### 2. AI 通信模块 - ai_communicator.py
-```python
-send_to_ai(user_task, screenshot_path, conversation_history=None)
-# 功能：base64编码截图，发送给支持视觉的AI模型
-# 自动解析JSON响应，支持Markdown包裹的JSON
-```
-
-#### 3. 命令解析器 - command_parser.py
-```python
-parse_and_execute_command(auto, command)
-# 支持的action：
-# - left_click, right_click, double_click
-# - drag, hover, select_area, scroll
-# - type_text, press_key, hotkey
-# - type_password
-# - task_completed, continue
-```
-
-#### 4. 主程序闭环 - feishu_cua.py
-```python
-feishu_cua_system(user_task, max_iterations=10, fail_safe=True)
-# 工作流：
-# 1. 用户输入任务
-# 2. 5秒准备时间
-# 3. 循环执行：截图→发AI→执行→检查完成
-# 4. 最多10次迭代，防止无限循环
-```
-
----
-
-### 系统提示词设计 - config.py
-
-**SYSTEM_PROMPT** 包含：
-1. AI 能力说明（告诉 AI 能做什么）
-2. 所有操作的 JSON 格式示例
-3. 坐标系统说明
-4. 工作流程说明
-
----
-
-### 新增依赖
-
-- ✅ `requests` - HTTP 请求库，用于调用 AI API
-
----
-
-### 项目结构
-
-```
-e:\cpulark\11\
-├── 【v1.0 核心库】
-│   └── desktop_automation.py    # 桌面自动化操作
-│
-├── 【v2.0 新增模块】
-│   ├── screenshot.py            # 屏幕截图
-│   ├── ai_communicator.py       # AI 通信
-│   ├── command_parser.py        # JSON 命令解析
-│   ├── feishu_cua.py          # 主程序（完整闭环）
-│   └── config.py              # 配置文件
-│
-├── 【文档 & 配置】
-│   ├── requirements.txt       # 依赖列表
-│   ├── README.md            # 使用说明（原始）
-│   ├── PROJECT_OVERVIEW.md  # 完整项目说明
-│   └── CHANGELOG.md         # 本文档
-```
-
----
-
-### 使用方法
-
-1. 安装依赖
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. 配置 API
-   ```python
-   # config.py
-   AI_CONFIG = {
-       'api_endpoint': '你的API地址',
-       'api_key': '你的API密钥',
-       'model': '支持视觉的模型',
-   }
-   ```
-
-3. 运行主程序
-   ```bash
-   python feishu_cua.py
-   ```
-
----
-
-### 安全机制
-
-- ✅ **故障安全**：鼠标移到屏幕左上角紧急停止
-- ✅ **最大迭代次数**：默认 10 次，防止无限循环
-- ✅ **操作间隔**：每个操作后暂停 0.5 秒
-
----
-
-### AI 能力清单
-
-#### 鼠标操作
-```json
-{"action":"left_click","x":500,"y":300}
-{"action":"right_click","x":500,"y":300}
-{"action":"double_click","x":500,"y":300}
-{"action":"drag","start_x":100,"start_y":100,"end_x":300,"end_y":300}
-{"action":"hover","x":500,"y":300}
-{"action":"select_area","start_x":100,"start_y":100,"end_x":300,"end_y":300}
-{"action":"scroll","clicks":10}
-```
-
-#### 键盘操作
-```json
-{"action":"type_text","text":"要输入的内容"}
-{"action":"press_key","key":"enter"}
-{"action":"hotkey","keys":["ctrl","v"]}
-```
-
-#### 密码输入
-```json
-{"action":"type_password","password":"xxx"}
-```
-
-#### 任务控制
-```json
-{"action":"task_completed","result":"成功！"}
-{"action":"continue"}
-```
-
----
-
-### 本次更新总结
-
-- ✅ 完整实现 CUA 系统闭环
-- ✅ 模块化设计，清晰易用
-- ✅ 包含完整的开发文档
-- ✅ 保留 v1.0 所有功能
-
----
-
----
-
-## 版本：v2.1 - 适配火山方舟（豆包 2.0 Pro）
-
-### 更新内容
-- ✅ 配置文件适配火山方舟 API
-- ✅ 使用 endpoint_id 代替 model 参数
-- ✅ temperature 调至 0.1，更稳定输出 JSON
-- ✅ 填入真实 API Key 和接入点 ID
-
----
-
----
-
-## 版本：v2.2 - 屏幕尺寸比例计算坐标
-
-### 更新内容
-- ✅ 在 SYSTEM_PROMPT 中加入屏幕尺寸说明
-- ✅ 告诉 AI 使用比例计算坐标（比例×屏幕尺寸）
-- ✅ 在 feishu_cua 中获取屏幕尺寸
-- ✅ 在发送给 AI 的消息中加入【屏幕尺寸：宽x高】信息
-
----
-
----
-
-## 版本：v2.3 - 修复火山方舟 API 不兼容问题
-
-### 问题
-- ❌ 火山方舟模型不支持 `response_format: {"type": "json_object"}` 参数
-- ❌ 导致 400 Bad Request 错误
-
-### 修复
-- ✅ 删除 payload 中的 `response_format` 参数
-- ✅ 保留 JSON 解析逻辑（从 AI 回复中提取 JSON）
-
----
-
----
-
-## 版本：v2.4 - AI 描述和返回桌面提示
-
-### 改进内容
-- ✅ 在 SYSTEM_PROMPT 中加入 description 字段，让 AI 描述看到了什么、要做什么
-- ✅ 在 SYSTEM_PROMPT 中加入 thought 字段，让 AI 写下思考过程
-- ✅ 在 SYSTEM_PROMPT 中加入【特殊提示】：对于“打开软件”操作，优先尝试返回桌面（Win+D）
-- ✅ 在 feishu_cua 中打印💭 AI思考 和 📝 AI描述
-- ✅ 更新 command_parser，支持 task_completed 字段在顶层
-
----
-
----
-
-## 版本：v2.5 - 打印鼠标坐标，方便调试定位
-
-### 更新内容
-- ✅ 在 command_parser.py 中加入鼠标操作坐标打印
-- ✅ 打印格式：`📍 左键点击位置: (x, y)`
-- ✅ 支持所有鼠标操作（left_click, right_click, double_click, drag, hover, select_area, scroll）
-
----
-
----
-
-## 版本：v2.6 - 加入豆包坐标线性修正
-
-### 更新内容
-- ✅ 在 command_parser.py 中加入坐标修正系数 x_scale = 2.55, y_scale = 1.44
-- ✅ 对所有鼠标操作坐标进行修正
-- ✅ 打印时显示 `[修正: x*2.55, y*1.44]` 提示
-
----
-
----
-
-## 版本：v3.0 - 飞书专属 + 图形界面
-
-### 更新目标
-
-为飞书比赛准备，让程序成为飞书的"AI操作助手"：
-1. 支持连续任务，保留对话历史
-2. 提供图形界面，更易用
-3. 新增文件操作功能
-4. 支持纯聊天模式
-5. 完整的飞书界面说明
-
----
-
-### 新增功能
-
-#### 1. 图形界面 - gui_app.py ✨
-```python
-# 使用 tkinter 构建的图形界面
-# - 窗口固定在右上角
-# - 置顶显示
-# - 可拖拽移动
-# - 实时显示 AI 思考和描述
-# - 输入框支持回车发送
-# - 最小化、关闭按钮
-# - 初始化系统按钮
-```
-
-#### 2. 重构 feishu_cua.py - 支持连续任务
-```python
-class FeishuCUASystem:
-    """飞书 CUA 系统类，支持连续任务"""
-    # 新增功能：
-    # - conversation_history 持久保存对话历史
-    # - add_to_history() 方法添加对话
-    # - execute_one_iteration() 单次迭代
-    # - run_task() 运行任务，支持回调函数
-    # - 保留原 feishu_cua_system() 函数作为终端模式入口
-```
-
-#### 3. 新增文件操作 - open_folder
-```python
-# desktop_automation.py
-def open_folder(self, folder_path: str):
-    """通过路径打开文件夹"""
-    if os.path.exists(folder_path):
-        os.startfile(folder_path)  # Windows 系统打开文件夹
-
-# command_parser.py 新增 action
-elif action == 'open_folder':
-    folder_path = command.get('path', '')
-    auto.open_folder(folder_path)
-```
-
-#### 4. 纯聊天模式支持
-```python
-# command_parser.py
-valid_actions = [...]  # 有效操作列表
-# 如果 action 不在列表中，直接返回 description 或 thought 作为聊天结果
-```
-
----
-
-### config.py 更新
-
-#### 新增【飞书界面以及相关功能介绍】
-- ✅ 左侧导航栏完整说明（从上到下）
-- ✅ 头像、搜索栏、消息、知识问答、云文档、推荐、多维表格、视频会议
-- ✅ 日历功能详细说明
-- ✅ 圆形加号按钮功能
-- ✅ 窗口控制按钮说明
-
-#### 新增【2. 文件操作】说明
-- `open_folder` 使用示例
-
-#### 更新【特殊提示】
-- ✅ 优先从任务栏寻找软件图标
-- ✅ 跨窗口传文件用复制粘贴
-- ✅ 有路径时优先用 open_folder
-- ✅ 飞书CUA界面位置说明（可拖拽挪开）
-- ✅ 纯聊天模式说明
-
-#### 更新工作流
-- 最大迭代次数从 10 改为 15
-
----
-
-### 其他文件清理
-
-- ✅ 删除 `desktop_automation.py` 中的示例代码
-- ✅ 删除 `screenshot.py` 中的测试代码
-- ✅ 删除 `command_parser.py` 中的测试代码
-- ✅ 删除布尔值 task_completed 判断，统一用 action
-
----
-
-### 新增文件
-
-| 文件名 | 功能 |
-|--------|------|
-| `gui_app.py` | 🎨 图形界面程序，推荐使用 |
-| `.gitignore` | Git 忽略文件配置 |
-
----
-
-### 更新文件
-
-| 文件名 | 更新内容 |
-|--------|----------|
-| `desktop_automation.py` | 新增 `open_folder()` 方法 |
-| `feishu_cua.py` | 重构为 `FeishuCUASystem` 类，支持连续任务 |
-| `command_parser.py` | 新增 `open_folder` action，支持纯聊天模式 |
-| `config.py` | 完整的飞书界面说明，新增功能提示 |
-| `README.md` | 更新为 v3.0，完整文档 |
-
----
-
-### 使用方式
-
-**方式1：图形界面（推荐）**
-```bash
-python gui_app.py
-# 点击【初始化系统】
-# 输入任务
-# 支持连续任务！
-```
-
-**方式2：终端模式**
-```bash
-python feishu_cua.py
-```
-
----
-
-### 本次更新总结
-
-- ✅ 新增图形界面程序
-- ✅ 支持连续任务，保留对话历史
-- ✅ 新增 open_folder 文件操作
-- ✅ 支持纯聊天模式
-- ✅ 完整的飞书界面说明
-- ✅ 更新 README.md 为 v3.0
-- ✅ 清理示例代码，保持整洁
-
----
-
-**最后更新**: 2026-04-26
+**最后更新**: 2026-05-03

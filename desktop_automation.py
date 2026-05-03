@@ -63,13 +63,20 @@ class DesktopAutomation:
             # 直接键盘输入，仅支持英文
             pyautogui.typewrite(text, interval=interval)
     
-    def type_password(self, password: str, confirm: bool = True):
+    def type_password(self, password: str, confirm: bool = True, x: Optional[int] = None, y: Optional[int] = None):
         """
         专门用于输入密码的函数
         密码框会自动切换到英文输入模式，使用直接键盘输入更安全
         :param password: 要输入的密码
         :param confirm: 是否按两次 enter 确认（默认 True，防止换行问题）
+        :param x: 密码框的x坐标，提供则先点击激活
+        :param y: 密码框的y坐标，提供则先点击激活
         """
+        # 如果提供了坐标，先点击激活密码框
+        if x is not None and y is not None:
+            self.left_click(x, y)
+            self.wait(0.3)
+        
         # 直接键盘输入密码，避免剪贴板泄露风险
         pyautogui.typewrite(password, interval=0.02)
         if confirm:
@@ -218,12 +225,14 @@ class DesktopAutomation:
         else:
             raise FileNotFoundError(f"文件夹不存在: {folder_path}")
     
-    def click_paste_enter(self, x: Optional[int] = None, y: Optional[int] = None):
+    def click_paste(self, text: str, x: Optional[int] = None, y: Optional[int] = None):
         """
-        组合操作：点击输入框 + 粘贴 + 回车（连招！）
+        组合操作：写入剪贴板 + 点击输入框 + 粘贴（完整输入连招！）
+        :param text: 要输入的文本内容
         :param x: 点击的x坐标，不提供则点击当前位置
         :param y: 点击的y坐标，不提供则点击当前位置
         """
+        self.copy_to_clipboard(text)
         if x is not None and y is not None:
             self.left_click(x, y)
         else:
@@ -231,7 +240,6 @@ class DesktopAutomation:
         self.wait(0.3)
         self.hotkey('ctrl', 'v')
         self.wait(0.2)
-        self.press_key('enter')
     
     # ==================== 文本编辑功能 ====================
     
