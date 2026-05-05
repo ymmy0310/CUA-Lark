@@ -104,22 +104,30 @@ class FeishuCUASystem:
             if callback:
                 callback(desc_msg)
 
-        # 6️⃣ 连续相同操作检测
-        action_key = f"{ai_command.get('action','')}_{ai_command.get('x','')}_{ai_command.get('y','')}"
-        if action_key == self.last_action_key:
-            self.consecutive_same_action += 1
-        else:
-            self.consecutive_same_action = 1
-            self.last_action_key = action_key
+        # 6️⃣ 连续相同操作检测（仅检测鼠标操作，排除热键等合法重复操作）
+        action = ai_command.get('action', '')
+        # 只检测有坐标的鼠标操作，热键(如ctrl+v)、窗口控制等不检测
+        mouse_actions = ['left_click', 'right_click', 'double_click', 'click_paste', 'select_text']
+        if action in mouse_actions:
+            action_key = f"{action}_{ai_command.get('x','')}_{ai_command.get('y','')}"
+            if action_key == self.last_action_key:
+                self.consecutive_same_action += 1
+            else:
+                self.consecutive_same_action = 1
+                self.last_action_key = action_key
 
-        if self.consecutive_same_action >= 3:
-            count = self.consecutive_same_action
-            if callback:
-                callback(f"⚠️ 连续{count}次相同操作，强制请求用户帮助")
+            if self.consecutive_same_action >= 3:
+                count = self.consecutive_same_action
+                if callback:
+                    callback(f"⚠️ 连续{count}次相同操作，强制请求用户帮助")
+                self.consecutive_same_action = 0
+                self.last_action_key = ""
+                return {'type': 'request_input',
+                        'prompt': f'你已经连续{count}次执行了相同操作({action})，请提供帮助。'}
+        else:
+            # 非鼠标操作，重置计数
             self.consecutive_same_action = 0
             self.last_action_key = ""
-            return {'type': 'request_input',
-                    'prompt': f'你已经连续{count}次执行了相同操作({ai_command.get("action")})，请提供帮助。'}
 
         # 7️⃣ 执行命令
         if callback:
@@ -129,6 +137,14 @@ class FeishuCUASystem:
         # 8️⃣ 处理 request_input（AI主动请求用户输入）
         if isinstance(result, dict) and result.get('type') == 'request_input':
             return result  # 直接返回，让上层处理
+
+        # 8️⃣.5️⃣ 处理剪贴板内容（复制操作后自动读取）
+        if isinstance(result, dict) and result.get('type') == 'clipboard_content':
+            clipboard_content = result.get('content', '')
+            if callback:
+                callback(f"📋 已读取剪贴板内容: {clipboard_content[:80]}{'...' if len(clipboard_content) > 80 else ''}")
+            # 将剪贴板内容加入对话历史，让AI在下一轮能看到
+            self.add_to_history("system", f"[剪贴板内容] {clipboard_content}")
 
         # 9️⃣ 执行后等待
         self.auto.wait(2.0)

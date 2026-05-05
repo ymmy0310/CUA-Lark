@@ -26,7 +26,8 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
         'type_password', 'task_completed', 'continue', 'open_folder',
         'click_paste', 'select_text', 'delete_text', 'delete_selected',
         'select_all', 'delete_all', 'delete_word_left', 'delete_word_right',
-        'request_input', 'show_cua_window', 'hide_cua_window'
+        'request_input', 'show_cua_window', 'hide_cua_window',
+        'shift_click'
     ]
     
     # 如果不是有效的操作，且有description或thought，就直接结束（纯聊天模式）
@@ -150,6 +151,12 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
             interval = command.get('interval', 0.0)
             auto.hotkey(*keys, interval=interval)
             auto.wait(0.5)
+            # 如果复制操作，自动读取剪贴板内容并返回
+            if sorted(keys) == ['ctrl', 'c']:
+                clipboard_content = auto.get_from_clipboard()
+                if clipboard_content:
+                    print(f"📋 剪贴板内容: {clipboard_content[:100]}{'...' if len(clipboard_content) > 100 else ''}")
+                    return {'type': 'clipboard_content', 'content': clipboard_content}
             
         # 密码输入
         elif action == 'type_password':
@@ -209,7 +216,27 @@ def parse_and_execute_command(auto: DesktopAutomation, command: Dict, screen_w: 
             auto.wait(0.3)
             auto.hotkey('ctrl', 'a')
             auto.wait(0.3)
-        
+
+        elif action == 'shift_click':
+            x = command.get('x')
+            y = command.get('y')
+            start_x = command.get('start_x')
+            start_y = command.get('start_y')
+            if x is not None:
+                x = int(x * screen_w)
+            if y is not None:
+                y = int(y * screen_h)
+            if start_x is not None:
+                start_x = int(start_x * screen_w)
+            if start_y is not None:
+                start_y = int(start_y * screen_h)
+            if start_x is not None and start_y is not None:
+                print(f"🎯 Shift+点击选中文本: ({start_x}, {start_y}) → ({x}, {y}) [归一化系数]")
+            else:
+                print(f"🎯 Shift+点击选中文本到: ({x}, {y}) [归一化系数]")
+            auto.shift_click(x=x, y=y, start_x=start_x, start_y=start_y)
+            auto.wait(0.3)
+
         # 文本编辑操作
         elif action == 'delete_text':
             count = command.get('count', 1)

@@ -190,6 +190,38 @@ class DesktopAutomation:
         :param duration: 拖拽持续时间（秒）
         """
         self.drag_to(end_x, end_y, start_x, start_y, duration=duration)
+
+    def shift_click(self, x: int, y: int, start_x: Optional[int] = None, start_y: Optional[int] = None):
+        """
+        按住Shift点击，用于从当前光标位置选中文本到目标位置
+        :param x: 目标位置x坐标
+        :param y: 目标位置y坐标
+        :param start_x: 起始位置x坐标，提供则先点击起始位置
+        :param start_y: 起始位置y坐标，提供则先点击起始位置
+        """
+        if start_x is not None and start_y is not None:
+            self.left_click(start_x, start_y)
+            self.wait(0.2)
+        
+        pyautogui.keyDown('shift')
+        self.left_click(x, y)
+        pyautogui.keyUp('shift')
+        self.wait(0.2)
+
+    def select_text_drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration: float = 0.5):
+        """
+        通过拖拽选中文本（按住鼠标左键拖动）
+        :param start_x: 选中文本起始x坐标
+        :param start_y: 选中文本起始y坐标
+        :param end_x: 选中文本结束x坐标
+        :param end_y: 选中文本结束y坐标
+        :param duration: 拖拽持续时间（秒）
+        """
+        pyautogui.moveTo(start_x, start_y)
+        pyautogui.mouseDown()
+        pyautogui.moveTo(end_x, end_y, duration=duration)
+        pyautogui.mouseUp()
+        self.wait(0.2)
     
     # ==================== 辅助功能 ====================
     

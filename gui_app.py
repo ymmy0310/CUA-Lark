@@ -227,7 +227,7 @@ class MiniControlBar:
                                      font=("微软雅黑", 9), anchor=tk.W)
         self.action_label.pack(fill=tk.X, padx=10, pady=(3, 0))
 
-        self.log_text = scrolledtext.ScrolledText(self.detail_frame, height=6, width=45,
+        self.log_text = scrolledtext.ScrolledText(self.detail_frame, height=9, width=45,
                                                   font=("微软雅黑", 8), bg="#2c3e50", fg="#ecf0f1")
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         self.log_text.config(state=tk.DISABLED)
@@ -763,8 +763,8 @@ class FeishuCUAGUI:
         self.input_text.focus()
         
         self.pause_btn.config(state=tk.DISABLED)
-        self.continue_btn.config(state=tk.NORMAL)
-        self.send_btn.config(text="确认并执行", command=self._confirm_understanding)
+        self.continue_btn.config(state=tk.DISABLED)
+        self.send_btn.config(text="确认并执行", command=self._confirm_understanding, state=tk.NORMAL)
         self.update_step_display("等待确认...")
         self.update_action_display("🧠 理解确认")
         self.mini_bar.set_pause_state(True)
@@ -841,7 +841,7 @@ class FeishuCUAGUI:
         
         self.pause_btn.config(state=tk.DISABLED)
         self.continue_btn.config(state=tk.NORMAL)
-        self.send_btn.config(text="发送建议", command=self._send_note_during_pause)
+        self.send_btn.config(text="发送建议", command=self._send_note_during_pause, state=tk.NORMAL)
         self.update_step_display("等待输入...")
         self.update_action_display("⏸️ 已暂停")
         self.mini_bar.set_pause_state(True)
