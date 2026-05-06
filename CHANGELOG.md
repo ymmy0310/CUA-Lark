@@ -2,6 +2,77 @@
 
 ---
 
+## 版本：v4.0 (2026-05-06)
+
+### 更新目标
+实现「飞书全流程交互」——用户全程在飞书里与 CUA 系统交互，无需打开主窗口。AI 提问通过飞书消息发送，用户回复后继续执行，打造真正的飞书原生 AI 助手体验。
+
+### 新增功能
+
+1. **飞书全流程交互架构**
+   - 用户在飞书里 @ 机器人即可触发任务，全程无需打开 CUA 主窗口
+   - AI 需要用户输入时，通过飞书消息提问，不弹出主窗口
+   - 用户在飞书里回复后，AI 继续执行任务
+   - 任务完成后自动发送结果到飞书用户
+   - 三线程架构：主线程(GUI)、后台线程(WebSocket 长连接)、任务线程(CUA 执行)
+
+2. **feishu_ws_client.py 重构为主入口**
+   - 重写为系统主入口，同时启动 GUI 和 WebSocket 长连接监听
+   - 新增 `make_feishu_callback(open_id)` 闭包机制，捕获用户上下文
+   - 新增消息路由逻辑：自动区分新任务和用户回复
+     - 新任务 → 调用 `gui_app.external_run()` 启动执行
+     - 用户回复 → 调用 `gui_app.receive_feishu_reply()` 恢复任务
+   - 使用 `root.after(0, ...)` 确保跨线程安全调用 GUI
+   - 新增 `send_message_to_user()` 通过飞书 API 发送消息给用户
+
+3. **gui_app.py 飞书模式支持**
+   - 新增 `is_feishu_mode` / `feishu_callback` / `feishu_reply` 状态管理
+   - 新增 `external_run(task, feishu_callback)` 方法，供 feishu_ws_client 调用
+     - 设置飞书模式、显示迷你控制条、启动任务执行线程
+     - 任务完成后自动发送结果到飞书用户
+   - 新增 `receive_feishu_reply(reply_text)` 方法，处理用户飞书回复
+     - 将回复写入对话历史、恢复任务执行
+   - 新增 `set_feishu_callback(callback)` 方法，单独设置飞书回调
+   - 新增任务队列 `task_queue`，处理多个飞书请求排队
+   - 修改 `_handle_request_input`：飞书模式下调用 `_handle_feishu_request_input`
+     - 通过 `feishu_callback` 将 AI 提问发送到飞书
+     - 等待用户在飞书回复，不弹出主窗口
+   - 修改 `_handle_understanding_confirmation`：飞书模式下自动确认任务理解，直接开始执行
+
+4. **交互时序**
+   ```
+   用户飞书发消息 → WS 收到 → gui_app.external_run()
+   → 迷你控制条显示 → CUA 执行 → AI 提问
+   → feishu_callback 发消息到飞书 → 用户飞书回复
+   → WS 收到 → gui_app.receive_feishu_reply()
+   → CUA 继续 → 完成 → 飞书收到 "✅ 任务已完成！"
+   ```
+
+### Bug 修复
+
+1. **飞书模式历史记录重复添加**
+   - 问题：`receive_feishu_reply` 已将用户回复写入历史，`_execute_with_input_support` 又写入一次
+   - 修复：飞书模式下跳过 `_execute_with_input_support` 中的重复写入
+
+2. **飞书模式状态清理不完整**
+   - 问题：任务结束后 `is_feishu_mode` 和 `feishu_callback` 未重置，影响后续任务
+   - 修复：在 `_run_feishu_task_thread` 的 finally 块中完整清理所有飞书状态
+
+### 代码更新
+- `feishu_ws_client.py` - 完全重写，整合 GUI 启动 + WebSocket 监听 + 消息路由 + 飞书 API 消息发送
+- `gui_app.py` - 新增飞书模式状态管理、external_run、receive_feishu_reply、set_feishu_callback、任务队列、飞书提问/回复处理、完成通知
+
+### 运行方式
+```bash
+# 飞书全流程模式（推荐）
+python feishu_ws_client.py
+
+# 传统 GUI 模式
+python gui_app.py
+```
+
+---
+
 ## 版本：v3.6 (2026-05-04)
 
 ### 更新目标

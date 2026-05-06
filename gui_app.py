@@ -334,7 +334,7 @@ class FeishuCUAGUI:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("飞书CUA系统 v3.5")
+        self.root.title("飞书CUA系统 v4.0")
         
         self.window_width = 1400
         self.window_height = 1100
@@ -353,6 +353,11 @@ class FeishuCUAGUI:
         self.current_task = ""
         self.current_step_info = ""
         self.current_action_info = ""
+
+        self.is_feishu_mode = False
+        self.feishu_callback = None
+        self.feishu_reply = None
+        self.task_queue = []
         
         self.create_widgets()
         self.create_mini_bar()
@@ -482,6 +487,13 @@ class FeishuCUAGUI:
 2. 等待3秒准备就绪
 3. 在输入框输入任务描述
 4. 按Enter发送（Shift+Enter换行）
+
+🆕 【飞书全流程模式】
+• 运行 feishu_ws_client.py 启动飞书长连接
+• 在飞书里 @ 机器人发送任务即可
+• AI 提问会通过飞书消息发送，直接在飞书回复
+• 全程无需打开此窗口！
+
 【AI支持的操作】
 • 鼠标: left_click / right_click / double_click / drag / scroll
 • 输入文本(唯一方式): click_paste (点击+粘贴一步完成)
@@ -665,6 +677,11 @@ class FeishuCUAGUI:
         self.pause_btn.config(state=tk.NORMAL)
         self.continue_btn.config(state=tk.DISABLED)
         
+        # 重置迷你控制条状态
+        self.mini_bar.update_status("⏳ 准备中")
+        self.mini_bar.update_step("--")
+        self.mini_bar.update_action("--")
+        
         self.hide_main_window()
         
         thread = threading.Thread(target=self._run_task_thread, args=(user_task,))
@@ -729,11 +746,11 @@ class FeishuCUAGUI:
                 if not self.is_running:
                     return
 
-                # 暂停时用户输入的内容加入历史记录，不开启新任务
-                user_feedback = self.current_task
-                if user_feedback and user_feedback != "继续":
-                    self.log(f"📝 用户反馈: {user_feedback}")
-                    self.system.add_to_history("user", f"[用户反馈] {user_feedback}")
+                if not self.is_feishu_mode:
+                    user_feedback = self.current_task
+                    if user_feedback and user_feedback != "继续":
+                        self.log(f"📝 用户反馈: {user_feedback}")
+                        self.system.add_to_history("user", f"[用户反馈] {user_feedback}")
 
                 self.system.auto.wait(1)
                 continue
@@ -743,6 +760,12 @@ class FeishuCUAGUI:
     
     def _handle_understanding_confirmation(self, result):
         """处理任务理解确认"""
+        if self.is_feishu_mode:
+            self.log("🧠 飞书模式：自动确认任务理解，开始执行...")
+            self.update_step_display("开始执行...")
+            self.update_action_display("⚡ 执行中")
+            return
+
         self.is_waiting_for_input = True
         
         self.show_main_window()
@@ -799,6 +822,9 @@ class FeishuCUAGUI:
         self.continue_btn.config(state=tk.DISABLED)
         self.update_step_display("开始执行...")
         self.update_action_display("⚡ 执行中")
+        
+        # 重新隐藏主窗口，显示迷你控制条
+        self.hide_main_window()
     
     def _status_callback(self, message):
         """状态回调"""
@@ -824,28 +850,51 @@ class FeishuCUAGUI:
     
     def _handle_request_input(self, prompt):
         """处理请求用户输入"""
+        if self.is_feishu_mode and self.feishu_callback:
+            self._handle_feishu_request_input(prompt)
+            return
+
         self.is_waiting_for_input = True
-        
+
         self.show_main_window()
-        
+
         self.log("\n" + "="*60)
         self.log(f"🙋 AI需要更多信息:")
         self.log(f"   {prompt}")
         self.log("="*60)
-        
+
         default_text = "无意见" if "规划" in prompt or "审阅" in prompt else ""
         self.input_text.delete(1.0, tk.END)
         if default_text:
             self.input_text.insert(tk.END, default_text)
         self.input_text.focus()
-        
+
         self.pause_btn.config(state=tk.DISABLED)
         self.continue_btn.config(state=tk.NORMAL)
         self.send_btn.config(text="发送建议", command=self._send_note_during_pause, state=tk.NORMAL)
         self.update_step_display("等待输入...")
         self.update_action_display("⏸️ 已暂停")
         self.mini_bar.set_pause_state(True)
-        
+
+        while self.is_waiting_for_input:
+            self.root.update()
+            time.sleep(0.1)
+
+    def _handle_feishu_request_input(self, prompt):
+        """飞书模式：通过飞书消息提问，等待用户回复"""
+        self.is_waiting_for_input = True
+
+        self.log("\n" + "="*60)
+        self.log(f"🙋 AI需要更多信息（已发送到飞书）:")
+        self.log(f"   {prompt}")
+        self.log("="*60)
+
+        self.update_step_display("等待飞书回复...")
+        self.update_action_display("⏸️ 等待飞书")
+        self.mini_bar.set_pause_state(True)
+
+        self.feishu_callback(prompt)
+
         while self.is_waiting_for_input:
             self.root.update()
             time.sleep(0.1)
@@ -927,7 +976,108 @@ class FeishuCUAGUI:
         if not config_manager.is_configured():
             messagebox.showinfo("欢迎使用", "首次使用，请先配置 API 信息！")
             self.open_config_window()
-    
+
+    def external_run(self, task, feishu_callback):
+        """
+        供 feishu_ws_client 调用的外部入口
+        在飞书模式下执行任务：迷你控制条显示状态，AI 提问通过飞书消息发送
+
+        :param task: 用户任务文本
+        :param feishu_callback: 回调函数，用于将 AI 提问发送到飞书
+        """
+        if not self.is_initialized:
+            self.log("⚠️ 系统未初始化，无法执行飞书任务")
+            return
+
+        if self.is_running:
+            self.log("⚠️ 已有任务正在执行中，飞书任务已排队")
+            self.task_queue.append((task, feishu_callback))
+            return
+
+        self.is_feishu_mode = True
+        self.feishu_callback = feishu_callback
+        self.original_task = task
+        self.current_task = task
+
+        self.log("\n" + "=" * 60)
+        self.log(f"📩 收到飞书任务: {task}")
+        self.log("=" * 60)
+
+        self.is_running = True
+        self.send_btn.config(state=tk.DISABLED)
+        self.pause_btn.config(state=tk.NORMAL)
+        self.continue_btn.config(state=tk.DISABLED)
+
+        self.mini_bar.update_status("⏳ 准备中")
+        self.mini_bar.update_step("--")
+        self.mini_bar.update_action("--")
+
+        self.hide_main_window()
+
+        thread = threading.Thread(target=self._run_feishu_task_thread, args=(task,))
+        thread.daemon = True
+        thread.start()
+
+    def _run_feishu_task_thread(self, user_task):
+        """飞书任务执行线程"""
+        task_success = False
+        try:
+            self.update_step_display("任务执行中...")
+            self._execute_with_input_support(user_task)
+            task_success = True
+        except Exception as e:
+            self.log(f"❌ 任务执行出错: {e}")
+        finally:
+            cb = self.feishu_callback
+            self.is_running = False
+            self.is_feishu_mode = False
+            self.feishu_callback = None
+            self.feishu_reply = None
+            self.send_btn.config(state=tk.NORMAL)
+            self.pause_btn.config(state=tk.DISABLED)
+            self.continue_btn.config(state=tk.DISABLED)
+            self.mini_bar.set_pause_state(False)
+            self.show_main_window()
+
+            if cb:
+                if task_success:
+                    cb("✅ 任务已完成！请在电脑上查看执行结果。")
+                else:
+                    cb("❌ 任务执行出错，请查看 CUA 主窗口日志了解详情。")
+
+            if self.task_queue:
+                next_task, next_callback = self.task_queue.pop(0)
+                self.root.after(500, self.external_run, next_task, next_callback)
+
+    def receive_feishu_reply(self, reply_text):
+        """
+        供 feishu_ws_client 调用：收到用户在飞书的回复后，恢复任务执行
+
+        :param reply_text: 用户在飞书中的回复文本
+        """
+        if not self.is_waiting_for_input:
+            self.log("⚠️ 当前未在等待用户输入，忽略飞书回复")
+            return
+
+        self.feishu_reply = reply_text
+        self.current_task = reply_text
+        self.system.add_to_history("user", f"[用户回复] {reply_text}")
+        self.is_waiting_for_input = False
+        self.update_step_display("继续执行...")
+        self.update_action_display("⚡ 执行中")
+        self.mini_bar.set_pause_state(False)
+        self.log(f"📩 收到飞书回复: {reply_text[:100]}{'...' if len(reply_text) > 100 else ''}")
+
+    def set_feishu_callback(self, callback):
+        """
+        设置飞书回调函数，用于将 AI 提问发送到飞书
+
+        :param callback: 回调函数，签名为 callback(prompt: str) -> None
+        """
+        self.feishu_callback = callback
+        self.is_feishu_mode = True
+        self.log("📡 飞书回调已设置，进入飞书交互模式")
+
     def open_config_window(self):
         """打开API配置窗口"""
         self._config_window = APIConfigWindow(self.root, self.on_config_saved)

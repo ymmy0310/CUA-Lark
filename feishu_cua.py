@@ -144,7 +144,7 @@ class FeishuCUASystem:
             if callback:
                 callback(f"📋 已读取剪贴板内容: {clipboard_content[:80]}{'...' if len(clipboard_content) > 80 else ''}")
             # 将剪贴板内容加入对话历史，让AI在下一轮能看到
-            self.add_to_history("system", f"[剪贴板内容] {clipboard_content}")
+            self.add_to_history("system", f"[复制内容：] {clipboard_content}")
 
         # 9️⃣ 执行后等待
         self.auto.wait(2.0)

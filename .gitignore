@@ -1,6 +1,7 @@
 # 个人敏感配置
 personal_API.txt
 config_api.json
+.env
 
 # 截图文件
 screenshots/
